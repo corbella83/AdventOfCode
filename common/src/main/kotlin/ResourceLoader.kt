@@ -7,7 +7,11 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 
 private fun remoteUrl(day: Int, year: Int) = URI("https://adventofcode.com/$year/day/$day/input")
-private fun localFolder(year: Int) = File("y$year/inputs").apply { mkdir() }
+private fun localFolder(year: Int): File {
+    var dir = System.getProperty("user.dir")
+    if (!dir.endsWith("y$year")) dir += "/y$year"
+    return File(dir, "inputs").apply { mkdir() }
+}
 
 interface ResourceLoader {
     fun load(day: Int, part: Int): Resource

@@ -1,7 +1,8 @@
 package corbella83.aoc.algorithms
 
+import corbella83.aoc.model.BufferList
+import corbella83.aoc.model.DynamicPriorityQueue
 import corbella83.aoc.utils.putAll
-import java.util.*
 
 class StoerWagner<T>(relations: List<Pair<T, T>>) {
     private val vertices = relations.map { listOf(it.first, it.second) }.flatten().toSet()
@@ -19,55 +20,39 @@ class StoerWagner<T>(relations: List<Pair<T, T>>) {
     }
 
     fun minCut(): Pair<Set<T>, Set<T>> {
-        val bestCut = BestCut()
-        while (nodes.size > 1) bestCut.minimumCutPhase()
-        return bestCut.vertex to vertices.toMutableSet().apply { removeAll(bestCut.vertex) }
+        var bestCut = minimumCutPhase()
+        while (nodes.size > 1) {
+            val cut = minimumCutPhase()
+            if (cut > bestCut) bestCut = cut
+        }
+        return bestCut.vertex.items to vertices.toMutableSet().apply { removeAll(bestCut.vertex.items) }
     }
 
-    private fun BestCut.minimumCutPhase() {
-        val trigger = nodes.first()
+    private fun minimumCutPhase(): Connection<T> {
+        val trigger = Connection(nodes.first())
 
-        val queue = PriorityQueue<Connection>()
-        val cache = HashMap<Node<T>, Connection>()
+        val queue = DynamicPriorityQueue(trigger)
+        val cache = hashMapOf(trigger.vertex to trigger)
 
-        nodes.filter { it != trigger }
-            .map { vertex -> vertex.connections[trigger]?.let { Connection(vertex, it, true) } ?: Connection(vertex) }
-            .forEach {
-                queue.add(it)
-                cache[it.vertex] = it
-            }
-
-        var last = trigger
-        var beforeLast: Node<T>? = null
+        val last = BufferList<Connection<T>>()
         while (!queue.isEmpty()) {
-            val current = queue.poll().vertex
-            cache.remove(current)
-            beforeLast = last
-            last = current
+            val current = queue.pop().also { last.put(it) }
 
-            current.connections
+            current.vertex.connections
                 .forEach { (vertex, weight) ->
-                    val connection = cache[vertex]
-                    if (connection != null) {
-                        queue.remove(connection)
-                        connection.active = true
-                        connection.weight += weight
-                        queue.add(connection)
-                    }
+                    val connection = cache.getOrPut(vertex) { Connection(vertex).also { queue.push(it) } }
+                    connection.weight += weight
                 }
         }
 
-        val lastWeight = last.connections.values.sumOf { it }
-        if (lastWeight < weight) {
-            weight = lastWeight
-            vertex = last.vertex
+        return with(last.get()) {
+            mergeVertices(first.vertex, second.vertex)
+            second
         }
-
-        mergeVertices(beforeLast!!, last)
     }
 
     private fun mergeVertices(node1: Node<T>, node2: Node<T>) {
-        val new = Node(node1.vertex + node2.vertex)
+        val new = Node(node1.items + node2.items)
         node1.connections.remove(node2)
         node2.connections.remove(node1)
 
@@ -86,26 +71,15 @@ class StoerWagner<T>(relations: List<Pair<T, T>>) {
         nodes.add(new)
     }
 
-    private inner class Connection(
-        val vertex: Node<T>,
-        var weight: Double = 1.0,
-        var active: Boolean = false
-    ) : Comparable<Connection> {
-        override fun compareTo(other: Connection): Int {
-            if (active && other.active) {
-                return -weight.compareTo(other.weight)
-            }
-            if (active) return -1
-            return if (other.active) 1 else 0
-        }
-    }
-
-    inner class BestCut {
-        var weight: Double = Double.POSITIVE_INFINITY
-        var vertex = setOf<T>()
-    }
-
-    private data class Node<T>(val vertex: Set<T>) {
+    private data class Node<T>(val items: Set<T>) {
         val connections = hashMapOf<Node<T>, Double>()
+    }
+
+    private data class Connection<T>(val vertex: Node<T>) : Comparable<Connection<T>> {
+        var weight: Double = 0.0
+
+        override fun compareTo(other: Connection<T>): Int {
+            return other.weight.compareTo(weight)
+        }
     }
 }

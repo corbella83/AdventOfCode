@@ -7,9 +7,9 @@ kotlin {
     jvmToolchain(17)
 }
 
-dependencies{
+dependencies {
     implementation(project(":common"))
-    implementation("org.jgrapht:jgrapht-core:1.5.2")
+    testImplementation(kotlin("test"))
 }
 
 application {
